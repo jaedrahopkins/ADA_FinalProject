@@ -89,9 +89,11 @@ odds.n.ends(model1a)
 ```
 ## Interpretation of Unadjusted Univariate Logistic Model
 
-There is a statistically significant difference in odds of experiencing sadness or depression for 2 or more weeks in the last 12 months. Those who were not very or not at all satisfied had 0.236 (95% CI: 0.113-0.500) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied. Those who were somewhat satisfied had 0.434 (95% CI: 0.286-0.667) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied.There was no statistical difference between those who were completely or very satisfied and their experience of sadness or depression for 2 or more weeks in the last 12 months. 
+There is not a statistically significant difference in odds of experiencing sadness or depression for 2 or more weeks in the last 12 months. Those who were very satisfied had 0.899 (95% CI: 0.607-1.315) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied. Those who were somewhat satisfied had 2.302 (95% CI: 1.499-3.498) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied. Those who were not very or not at all satisfied with being a parent had 4.242 (95% CI: 1.998-8.882) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied.
 
 However, the specificity equaling 1 is not correct. After running the model with collapsed satisfaction groups, it may be that the model needs more than one predictor variable.
+
+There is a statistically signicant difference in odds of experiencing sadness or depression for 2 or more weeks in the last 12 months between those who are not completely satisfied and those who are completely satisfied (OR=1.419, 95% CI: 1.042-1.933).
 
 ## Adjusted Logistic Model
 ```{r}
