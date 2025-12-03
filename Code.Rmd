@@ -1,0 +1,242 @@
+---
+title: "ADA Final Project"
+author: "Jaedra Hopkins"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Installing Packages and Loading Libraries
+```{r}
+pacman::p_load(ggplot2, car, odds.n.ends, readr, tidyr, gt, tidyverse, nnet, MASS, funModeling, brant, broom, dplyr)
+```
+
+## Load in Data
+```{r}
+load("ICPSR_04690-V10/ICPSR_04690/DS0001/04690-0001-Data.rda") #set to your working directory/own destination where file is saved
+FullDataSet<-da04690.0001 #saving dataset to an easier to use and identify name
+```
+
+## Dropping Unnecessary Variables and check variables
+```{r}
+FPData<-FullDataSet %>% 
+  dplyr::select(V1, "V15501", "V15502", "V15503", "V15504", "V15505", "V15506", "V15507","V15508", "V15509", "V15102", "V16012", "V15101", "V15193", "V15194", "V15195", "V15196", "V15199", "V15301", "V16510" , "V16612") #selecting variables used in this analysis
+sapply(FPData, class) #check class of each variable
+
+# Count NA values in each column using dplyr
+na_counts_dplyr <- FPData %>%
+  summarise_all(~ sum(is.na(.)))
+print(na_counts_dplyr)
+
+table(FPData$V15507, useNA="always")
+#exclude non-parents and the missing ones, could collapse not very and not at all satisfied into one category notes from meeting with Kim, Remove before publish
+```
+
+## Dropping Missing Variables and Individuals Without Children, Collapsing Categories
+```{r}
+#Dropping those who are missing, the 2,190 who were lost to follow-up prior to the completion of Wave 5 in 2011, and those who did not answer if they had children, were satisfied with being a parent, or were feeling sad in the past two weeks. 
+#Variable V15501 asks if they have reported having children, and yes is coded as 1, 1,175 individuals reported they had children.
+#Variable V15507 asks about parent satisfaction with being a parent, 1,062 answered the question.
+#Variable V16012 asks about if individual had felt sad, blue, or depressed for 2 or more weeks. 1,314 individuals answered the question.
+FPData_ex <- FPData %>%
+  filter(!is.na(V15501), !is.na(V15507), !is.na(V16012))
+#amount of data dropped and percent data dropped
+nrow(FPData) - nrow(FPData_ex)
+1- nrow(FPData_ex)/nrow(FPData)
+#1,072 observations were kept, 2,545 individuals were dropped, 70% of data dropped
+#This also dropped any individuals who did not have children as they would have been coded as NA for V15507.
+
+#Collapsing not very and not at all satisfied into one category for V15507, both of those groups have less than 20 individuals in each
+table(FPData_ex$V15507) #check prior to collapsing and recode
+FPData_ex <- FPData_ex %>%
+  mutate(V15507_recode = case_when(
+    V15507 %in% c("(4) Not very satisfied", "(5) Not at all satisfied") ~ "(4) Not very and not at all satisfied",
+    TRUE ~ V15507))
+table(FPData_ex$V15507_recode) #check recode worked, and that 4 levels are greater than 20
+
+#Recode V16012, so that sad/depressed is the event
+FPData_ex$V16012 <- recode(FPData_ex$V16012,
+                           "(1) Yes" = 1,   # sad/depressed
+                           "(5) No" = 0)   # not sad/depressed
+table(FPData_ex$V16012) #check recode
+#recode V15507_recode, so that there is two groups completely satisfied and not compeletely satisfied.
+FPData_ex <- FPData_ex %>% mutate(V15507_recode2 = ifelse(V15507_recode=="(1) Completely satisfied","Completely Satisfied", "Not completely Satisfied"))
+table(FPData_ex$V15507_recode2) #check recode
+```
+
+## Undadjusted Univariate Logistic Model
+```{r}
+#First understand how data varies across group
+table1 <- table(FPData_ex$V15507_recode, FPData_ex$V16012, useNA="always") #table
+addmargins(table1)
+
+#No continuous variable in this model, do not need to test for linearity. 
+
+#Running the model and getting ORs and 95% CIs
+model1 <- glm(V16012 ~ V15507_recode, data=FPData_ex, family="binomial")
+summary(model1)
+odds.n.ends(model1)
+
+#After running this, the specificity was 1 and sensitivity 0. That is not an accurate use. Let's check with the collapsed categories of completely satisfied vs not completely satisfied.
+
+#Running the model and getting ORs and 95% CIs using 2 category V15507
+model1a <- glm(V16012 ~ V15507_recode2, data=FPData_ex, family="binomial")
+summary(model1a)
+odds.n.ends(model1a)
+```
+## Interpretation of Unadjusted Univariate Logistic Model
+
+There is a statistically significant difference in odds of experiencing sadness or depression for 2 or more weeks in the last 12 months. Those who were not very or not at all satisfied had 0.236 (95% CI: 0.113-0.500) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied. Those who were somewhat satisfied had 0.434 (95% CI: 0.286-0.667) times the odds of experiencing sadness or depression for 2 or more weeks in the last 12 months compared to those who were completely satisfied.There was no statistical difference between those who were completely or very satisfied and their experience of sadness or depression for 2 or more weeks in the last 12 months. 
+
+However, the specificity equaling 1 is not correct. After running the model with collapsed satisfaction groups, it may be that the model needs more than one predictor variable.
+
+## Adjusted Logistic Model
+```{r}
+#adjusting for age, sex, life satisfaction, exercise and social interaction
+model2 <- glm(V16012 ~ V15507_recode + V15102 + V15101 + V15301 + V15199 + V15195, data=FPData_ex, family="binomial")
+summary(model2)
+odds.n.ends(model2)
+```
+
+## Interpretation of Adjusted Logistic Model
+
+Only sex and life satisfaction were additionally statistically significant. The model was statistically significant. Let's try an adjusted model with only sex and life satisfaction.
+
+## Adjusted Logistic Model Number 2
+```{r}
+#adjusting for sex and life satisfaction
+model3 <- glm(V16012 ~ V15507_recode + V15101 + V15301, data=FPData_ex, family="binomial")
+summary(model3)
+odds.n.ends(model3)
+```
+
+## Interpretation of Adjusted Logistic Model Number 2
+
+Model is significant. The very satisfied categories of both the parent satisfaction and life satisfaction variables were insignificant in the model, compared to completely satisfied.
+
+## Looking for influential observations from the multivariate model with Cook's D
+```{r}
+plot(model3, which = 4, id.n=5, col="blue")
+```
+
+## Interpretation of Cook's D
+
+There are several potentially influential outliers, but none exceeded a Cook's D value of >1.
+
+## Assess model fit
+```{r}
+odds.n.ends(model1, predProbPlot = TRUE, rocPlot = TRUE)
+odds.n.ends(model3, predProbPlot=TRUE, rocPlot=TRUE)
+```
+
+## Interpretation of model fit
+
+AUC increased in model 3 compared to model 1 (0.59 and 0.69, respectively). Model sensitivity decreased from model 1, which was 1 to 0.988 in model 3.
+
+## Now let's explore by adding in V16612, the variable asking how depressed the respondent seemed to be. An observation made by the interviewer.
+```{r}
+#table to visualize data spread
+table(FPData_ex$V16612, FPData_ex$V15507_recode, useNA="always")
+#Interpretation of table: one thing of note, no one in category Not very and not at all satisfied AND Quite, may cause invalid results.
+
+#model using V16612 instead of feelings of depression, three options 1) use multinomial logistic regression, 2) use ordinal logistic regression, 3) recode V16612 as yes or no and use binary logistic regression. Ordinal is better since V16612 is ranked, but multinomial could be used too. Options are referred to as 4a, 4b, and 4c.
+model4a <- multinom(V16612 ~ V15507_recode, data=FPData_ex) #multinomial
+summary(model4a)
+tidy(model4a, exponentiate = TRUE, conf.int = TRUE)
+
+model4b <- polr(V16612 ~ V15507_recode, data=FPData_ex) #ordinal
+summary(model4b)
+tidy(model4b, exponentiate = TRUE, conf.int = TRUE)
+
+brant(model4b) #brant test for parallel regression/proportional odds
+
+FPData_ex <- FPData_ex %>%
+  mutate(V16612_recode = if_else(V16612 == "(1) Not at all", 0, 1)
+  )
+table(FPData_ex$V16612_recode, useNA="always")
+table(FPData_ex$V16612, useNA="always")
+model4c <- glm(V16612_recode ~ V15507_recode, data=FPData_ex, family = "binomial")
+summary(model4c)
+odds.n.ends(model4c)
+odds.n.ends(model4c, predProbPlot = TRUE, rocPlot = TRUE)
+
+#model adding V16612 as a confounder into the unadjusted logistic model (model 1)
+model5 <- glm(V16012 ~ V15507_recode + V16612, data=FPData_ex, family="binomial")
+summary(model5)
+odds.n.ends(model5)
+odds.n.ends(model5, predProbPlot = TRUE, rocPlot = TRUE)
+
+#model adding V16612 into the adjusted logistic model (model 3)
+model6 <- glm(V16012 ~ V15507_recode + V15101 + V15301 + V16612, data=FPData_ex, family="binomial")
+summary(model6)
+odds.n.ends(model6)
+odds.n.ends(model6, predProbPlot = TRUE, rocPlot = TRUE)
+```
+
+## Interpretation
+
+No observations in category Not very and not at all satisfied AND Quite, may cause invalid results, especially when observing brant test for parallel regression/proportional odds assumption. 
+
+Interpretation of Model4b:
+The odds of being in a lower vs higher category of seeming depressed in those who were very satisfied with being a parent was statistically insignificant (OR=1.287, 95% CI= 0.965, 1.710), compared to those who were completely satisfied with being a parent.
+The odds of being in a lower vs higher category of seeming depressed in those who were somewhat satisfied with being a parent was statistically significant (OR=2.834, 95% CI= 1.975, 4.062), compared to those who were completely satisfied with being a parent.
+The odds of being in a lower vs higher category of seeming depressed in those who were not very and not at all satisfied with being a parent was statistically significant (OR=3.712, 95% CI= 1.807, 7.552), compared to those who were completely satisfied with being a parent.
+
+AIC is higher in model 4a and model 4b compared to model 1, however sensitivity is far lower. AIC is lower in models 5 and 6 compared to models 1 and 3, respectively. Could be used for a future exploration.
+
+## Creating Tables and Figures
+```{r}
+
+#Figure 1: How we got to the dataset for this project
+library(DiagrammeR)
+library(rsvg)
+grViz(diagram = "digraph flowchart{
+
+      node [fontname = Helvetica, shape = rectangle, fontsize=15] 
+      
+      node1 [label = '@@1'] # starting number
+      node2 [label = '@@2'] # number after exclusion 1
+      node3 [label = '@@3'] # number after exclusion 2
+      node4 [label = '@@4'] # number after exclusion 3
+      
+      node1 -> node2 -> node3 -> node4
+}
+      [1]: 'Starting number of records in Full Data Set dataframe n = 3,617'
+      [2]: 'Excluding 2,190 individuals who were lost to follow up prior to 2011 n = 1427'
+      [3]: 'Excluding 252 individuals without children n = 1175'
+      [4]: 'Excluding 103 individuals with missing data on V166012 and V15507 n = 1,072'
+      ")
+
+#Creating Table 1: A Descriptives Table
+library(table1)
+
+# Assign labels to the variables
+labels <- list(
+  V15507 = "Satisfaction with Being a Parent",
+  V16012 = "Sad/Depressed for 2+ Weeks in Past Year",
+  V15102 = "Age",
+  V15101 = "Sex",
+  V15301 = "Satisfaction with Life",
+  V15199 = "Exercise Frequency",
+  V15195 = "Social Interaction Frequency"
+)
+
+# Apply the labels to the dataset
+for (var in names(labels)) {
+     label(FPData_ex[[var]]) <- labels[[var]]
+}
+
+# Rename V16012 levels for readability
+FPData_ex$V16012_labeled <- factor(FPData_ex$V16012, 
+                            levels = c(0, 1), 
+                            labels = c("Not Sad/Depressed", "Sad/Depressed"))
+
+# Create Table 1
+table1(~ V15507 + V15102 + V15101 + V15301 + V15199 + V15195 | V16012_labeled, data = FPData_ex)
+```
+
+# Create a DAG using Dagitty
+![](dagitty-model (1).jpeg)
