@@ -223,7 +223,8 @@ labels <- list(
   V15101 = "Sex",
   V15301 = "Satisfaction with Life",
   V15199 = "Exercise Frequency",
-  V15195 = "Social Interaction Frequency"
+  V15195 = "Social Interaction Frequency",
+  V16612 = "Interviewer Precieved Depression"
 )
 
 # Apply the labels to the dataset
@@ -237,7 +238,7 @@ FPData_ex$V16012_labeled <- factor(FPData_ex$V16012,
                             labels = c("Not Sad/Depressed", "Sad/Depressed"))
 
 # Create Table 1
-table1(~ V15507 + V15102 + V15101 + V15301 + V15199 + V15195 | V16012_labeled, data = FPData_ex)
+table1(~ V15507 + V15102 + V15101 + V15301 + V15199 + V15195 + V16612 | V16012_labeled, data = FPData_ex)
 ```
 
 # Create a DAG using Dagitty
